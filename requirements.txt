@@ -1,0 +1,4 @@
+nnunetv2
+nibabel
+numpy
+scipy
