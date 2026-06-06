@@ -1,36 +1,33 @@
-# Base OS
-FROM ubuntu:22.04
+FROM --platform=linux/amd64 ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies, Python, and FSL via neurodebian
+# Instal·lem el necessari
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    wget \
-    neurodebian \
-    fsl-core \
-    && rm -rf /var/lib/apt/lists/*
+    python3 python3-pip wget git file dc unzip && rm -rf /var/lib/apt/lists/*
 
-# Configure FSL environment variables
-ENV FSLDIR=/usr/share/fsl/5.0
-ENV PATH=${FSLDIR}/bin:${PATH}
+# Install FSL
+RUN wget https://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
+    python3 fslinstaller.py -d /usr/local/fsl -q && rm fslinstaller.py
+ENV FSLDIR=/usr/local/fsl
+ENV PATH=${FSLDIR}/share/fsl/bin:${PATH}
 ENV FSLOUTPUTTYPE=NIFTI_GZ
 
-# Create data mount points and application directory
 RUN mkdir /input /output /weights /app
-
-# Copy application files and template resources
 COPY requirements.txt /app/
 COPY scripts/ /app/scripts/
 COPY resources/ /app/resources/
 
-# Install Python requirements
-RUN pip3 install --no-cache-dir -r /app/requirements.txt
+# Instal·lem dependències bàsiques
+RUN python3 -m pip install --no-cache-dir -r /app/requirements.txt
 
-# Set locale
+# Instal·lem les dependències que sí que existeixen i són necessàries
+RUN pip install --no-cache-dir batchgenerators dynamic-network-architectures batchgeneratorsv2 matplotlib seaborn
+
+# 10. Clonem i instal·lem nnUNet
+RUN git clone https://github.com/MIC-DKFZ/nnUNet.git /app/nnUNet && \
+    cd /app/nnUNet && \
+    pip install -e .
+
 ENV LC_ALL=C.UTF-8
-ENV LANG=C.UTF-8
-
-# Define working directory and entry point
 WORKDIR /app
 CMD ["python3", "scripts/main.py"]

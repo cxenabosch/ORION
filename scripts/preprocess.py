@@ -21,10 +21,15 @@ def get_base_name(p: Path) -> str:
     return p.name.replace(".nii.gz", "").replace(".nii", "")
 
 def prepare_directories():
-    if IMAGES_TS_DIR.exists(): shutil.rmtree(IMAGES_TS_DIR)
+    # if IMAGES_TS_DIR.exists():
+     # for f in IMAGES_TS_DIR.glob('*'):
+     #     if f.is_file() or f.is_symlink():
+      #        f.unlink()
+     #     elif f.is_dir():
+     #         shutil.rmtree(f)
     if TEMP_DIR.exists(): shutil.rmtree(TEMP_DIR)
-    IMAGES_TS_DIR.mkdir(parents=True)
-    TEMP_DIR.mkdir(parents=True)
+    IMAGES_TS_DIR.mkdir(parents=True, exist_ok=True)
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 def main():
     prepare_directories()

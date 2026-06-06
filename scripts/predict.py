@@ -1,22 +1,32 @@
 #!/usr/bin/env python3
 import os
-from pathlib import Path
-import subprocess
+import sys
 
-# --- Docker Configuration ---
+# --- CONFIGURACIÓ CRÍTICA DE DISPOSITIU (A dalt de tot, abans de nnUNet) ---
+os.environ["CUDA_VISIBLE_DEVICES"] = ""      # Desactiva completament CUDA
+os.environ["nnUNet_compile"] = "False"        # Evita intents de compilació per GPU
+# --------------------------------------------------------------------------
+
+# Forcem el path per si de cas, encara que ja ho hem arreglat al Dockerfile
+sys.path.append("/usr/local/lib/python3.10/dist-packages")
+
+from pathlib import Path
+from nnunetv2.inference.predict_from_raw_data import predict_entry_point
+
+# --- Configuració ---
 IMAGES_TS_DIR = Path("/app/imagesTs")
 OUTPUT_DIR = Path("/output")
+RESULTS_DIR = "/weights"
 
 def main():
     print(">>> Initializing ORION deep learning inference...")
 
-    env = os.environ.copy()
-    env["PYTORCH_ENABLE_MPS_FALLBACK"] = "0"
-    env["CUDA_VISIBLE_DEVICES"] = ""
-    env["nnUNet_results"] = "/weights"
+    # 1. Configurar variables d'entorn restants
+    os.environ["nnUNet_results"] = RESULTS_DIR
+    os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"  # Canviat a 1 per si PyTorch vol utilitzar l'arquitectura del Mac
 
-    cmd_predict = [
-        "nnUNetv2_predict",
+    # 2. Construir els arguments tal com els espera nnUNet
+    args = [
         "-i", str(IMAGES_TS_DIR),
         "-o", str(OUTPUT_DIR),
         "-d", "1",
@@ -24,21 +34,29 @@ def main():
         "-tr", "nnUNetTrainer",
         "-f", "all",
         "-chk", "checkpoint_best.pth",
-        "--save_probabilities",
-        "-device", "cpu"
+        "-device", "cpu",              # <--- NOU: Li diem a nnU-Net que usi estrictament la CPU
+        "--save_probabilities"
     ]
 
-    # Silence standard nnU-Net verbosity unless there's an error
-    subprocess.run(cmd_predict, check=True, env=env, stdout=subprocess.DEVNULL)
+    print(f">>> Arguments passed to nnUNet: {args}")
 
-    print(">>> Applying nomenclature to output segmentations...")
+    # 3. Executar la inferència
+    try:
+        # Enganyem el nnUNet substituint els arguments del sistema
+        sys.argv = ["nnUNet_predict"] + args
+        predict_entry_point()
+    except Exception as e:
+        print(f"!!! Error durant la inferència: {e}")
+        exit(1)
+
+    # 4. Post-processament
+    print("\n>>> Applying nomenclature to output segmentations...")
     for file_path in OUTPUT_DIR.iterdir():
         if file_path.is_file() and not file_path.name.startswith("orion_"):
             new_name = "orion_" + file_path.name
-            new_path = OUTPUT_DIR / new_name
-            file_path.rename(new_path)
+            file_path.rename(OUTPUT_DIR / new_name)
 
-    print(">>> ORION pipeline finished successfully! Results are in your output folder.")
+    print(">>> ORION pipeline finished successfully!")
 
 if __name__ == "__main__":
     main()
